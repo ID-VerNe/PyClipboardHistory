@@ -22,7 +22,7 @@ This tool enhances your productivity by providing a searchable, filterable, and 
 ## 🛠️ Tech Stack
 
 - **GUI**: Python's built-in `tkinter` library, with `ttk` for modern widgets.
-- **Clipboard Monitoring**: A custom polling mechanism using `pyperclip` (or a similar clipboard library).
+- **Clipboard Monitoring**: A custom polling mechanism using `pywin32` for robust, multi-format clipboard access on Windows.
 - **Global Hotkeys**: `pynput`
 - **Image Handling**: `Pillow` (PIL Fork)
 - **System Tray Icon**: `pystray`
