@@ -4,7 +4,7 @@ A feature-rich, AI-powered clipboard history manager for Windows, built with Pyt
 
 This tool enhances your productivity by providing a searchable, filterable, and previewable history of everything you copy. It supports text, images, and file paths, and leverages AI for automatic tagging of text content.
 
-![App Screenshot](https://i.imgur.com/your_screenshot_url.png)  <!-- It is recommended to replace this with a real screenshot URL -->
+![App Screenshot](https://wechat.likesyou.org/2025-10-06_232639.jpg)  <!-- It is recommended to replace this with a real screenshot URL -->
 
 ## ✨ Core Features
 
