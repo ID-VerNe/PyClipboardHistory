@@ -33,7 +33,7 @@ This tool enhances your productivity by providing a searchable, filterable, and 
 
 ### Prerequisites
 
-- Python 3.10+ (or the version used in your `.venv`)
+- Python 3.10+ 
 
 ### Installation & Usage
 
