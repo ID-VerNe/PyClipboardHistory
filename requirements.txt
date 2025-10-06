@@ -1,0 +1,7 @@
+pystray
+pynput
+Pillow
+screeninfo
+openai
+google-generativeai
+pywin32
