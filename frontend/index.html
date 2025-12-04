@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>Clipboard Home Screen</title>
+  <script src="3.4.js"></script>
+  <link href="css2.css" rel="stylesheet" />
+  <link href="css3.css" rel="stylesheet" />
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+
+    .material-symbols-outlined.fill-1 {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#007AFF",
+            "background-light": "#F2F2F7",
+            "background-dark": "#1C1C1E",
+            "card-light": "#FFFFFF",
+            "card-dark": "#2C2C2E",
+            "text-primary-light": "#000000",
+            "text-primary-dark": "#FFFFFF",
+            "text-secondary-light": "#8E8E93",
+            "text-secondary-dark": "#8E8E93",
+            "icon-light": "#000000",
+            "icon-dark": "#FFFFFF",
+          },
+          fontFamily: {
+            "display": ["Inter", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.5rem",
+            "lg": "0.75rem",
+            "xl": "1rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark font-display">
+  <div class="relative mx-auto w-full max-w-md">
+    <!-- Top App Bar - Fixed at top -->
+    <header
+      class="fixed top-0 left-0 right-0 z-10 mx-auto w-full max-w-md flex flex-col bg-background-light/95 pt-4 backdrop-blur-sm dark:bg-background-dark/95">
+      <div class="flex items-center px-4 pb-3">
+        <h1 class="flex-1 text-3xl font-bold text-text-primary-light dark:text-text-primary-dark">Clipboard</h1>
+        <div class="flex gap-2">
+          <button id="filter-fav-btn"
+            class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-zinc-200/50 text-icon-light transition-colors hover:bg-zinc-300/50 dark:bg-zinc-700/50 dark:text-icon-dark dark:hover:bg-zinc-600/50"
+            title="Show Favorites Only">
+            <span class="material-symbols-outlined">star</span>
+          </button>
+          <button id="settings-btn"
+            class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-zinc-200/50 text-icon-light transition-colors hover:bg-zinc-300/50 dark:bg-zinc-700/50 dark:text-icon-dark dark:hover:bg-zinc-600/50">
+            <span class="material-symbols-outlined">settings</span>
+          </button>
+        </div>
+      </div>
+      <!-- Search Bar -->
+      <div class="px-4 pb-3">
+        <label class="flex h-11 w-full flex-col">
+          <div class="flex h-full w-full flex-1 items-stretch rounded-lg">
+            <div
+              class="flex items-center justify-center rounded-l-lg bg-zinc-200/80 pl-3.5 text-text-secondary-light dark:bg-zinc-700/80 dark:text-text-secondary-dark">
+              <span class="material-symbols-outlined text-xl">search</span>
+            </div>
+            <input id="search-input"
+              class="form-input flex min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg border-none bg-zinc-200/80 px-2 text-base font-normal leading-normal text-text-primary-light placeholder:text-text-secondary-light focus:outline-0 focus:ring-0 dark:bg-zinc-700/80 dark:text-text-primary-dark dark:placeholder:text-text-secondary-dark"
+              placeholder="Search clipboard..." value="" />
+          </div>
+        </label>
+      </div>
+    </header>
+    <!-- Spacer to prevent content from being hidden under fixed header -->
+    <div class="h-[140px]"></div>
+    <!-- Clipboard List -->
+    <main id="history-list" class="flex flex-1 flex-col gap-2 p-4">
+      <!-- List Item 1 -->
+      <div class="flex items-center gap-4 rounded-xl bg-card-light p-4 shadow-sm dark:bg-card-dark">
+        <div class="flex flex-1 items-center gap-4 overflow-hidden">
+          <div
+            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-background-light dark:bg-background-dark">
+            <span
+              class="material-symbols-outlined text-2xl text-text-primary-light dark:text-text-primary-dark">language</span>
+          </div>
+          <div class="flex min-w-0 flex-1 flex-col justify-center">
+            <p class="truncate text-base font-medium text-text-primary-light dark:text-text-primary-dark">
+              https://apple.com/iphone-15-pro/</p>
+            <p class="truncate text-sm font-normal text-text-secondary-light dark:text-text-secondary-dark">From Safari
+              • 5m ago</p>
+          </div>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <button
+            class="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary-light dark:text-text-secondary-dark">
+            <span class="material-symbols-outlined text-2xl">star</span>
+          </button>
+          <button
+            class="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary-light dark:text-text-secondary-dark">
+            <span class="material-symbols-outlined text-2xl">delete</span>
+          </button>
+        </div>
+      </div>
+    </main>
+    <!-- Preview Tooltip -->
+    <div id="preview-tooltip"
+      class="pointer-events-none fixed z-50 hidden max-w-sm rounded-xl bg-slate-900/95 p-4 text-sm text-white shadow-xl backdrop-blur-sm transition-opacity duration-200 dark:bg-slate-100/95 dark:text-slate-900">
+      <div id="preview-content" class="line-clamp-[20] break-words whitespace-pre-wrap font-mono text-xs"></div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+
+</html>

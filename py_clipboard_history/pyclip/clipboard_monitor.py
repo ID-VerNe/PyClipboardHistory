@@ -8,9 +8,8 @@ from . import config
 
 class ClipboardMonitor(threading.Thread):
     """A thread that monitors the clipboard for changes at regular intervals."""
-    def __init__(self, root_tk_object, on_new_item_callback):
+    def __init__(self, on_new_item_callback):
         super().__init__(daemon=True)
-        self.root_tk_object = root_tk_object
         self.on_new_item_callback = on_new_item_callback
         self._stop_event = threading.Event()
         self._last_hash = None
@@ -43,7 +42,10 @@ class ClipboardMonitor(threading.Thread):
                         self._last_hash = current_hash
                         logging.info(f"New clipboard content detected (type: {item_type}, hash: {current_hash[:8]}...).")
                         # Pass both the data and its hash to the main thread
-                        self.root_tk_object.after(0, self.on_new_item_callback, {'data': clip_data, 'hash': current_hash})
+                        # Pass both the data and its hash to the main thread
+                        # Since we are no longer using Tkinter, we call the callback directly.
+                        # The callback implementation in app.py must handle thread safety (e.g. via pywebview's evaluate_js)
+                        self.on_new_item_callback({'data': clip_data, 'hash': current_hash})
                 
                 self._stop_event.wait(config.POLLING_INTERVAL_SECONDS)
 

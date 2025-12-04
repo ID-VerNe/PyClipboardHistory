@@ -34,6 +34,6 @@ IMAGE_STORAGE_PATH = STORAGE_DIR / "images"
 
 # --- Constants ---
 MAX_HISTORY_ITEMS = 200 # Default, will be overridden by settings
-THUMBNAIL_SIZE = (48, 48)
+THUMBNAIL_SIZE = (256, 256)
 PREVIEW_MAX_LEN = 120
 POLLING_INTERVAL_SECONDS = 1

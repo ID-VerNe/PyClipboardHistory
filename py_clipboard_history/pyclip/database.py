@@ -149,3 +149,14 @@ def toggle_favorite(entry_id: int):
             logging.info(f"Toggled favorite status for entry id {entry_id}.")
     except sqlite3.Error as e:
         logging.error(f"Failed to toggle favorite for entry id {entry_id}: {e}")
+
+def delete_entry(entry_id: int):
+    """Deletes an entry from the database."""
+    try:
+        with sqlite3.connect(config.DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM clipboard_history WHERE id = ?", (entry_id,))
+            conn.commit()
+            logging.info(f"Deleted entry id {entry_id}.")
+    except sqlite3.Error as e:
+        logging.error(f"Failed to delete entry id {entry_id}: {e}")

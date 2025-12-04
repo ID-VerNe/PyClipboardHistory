@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>Modern Settings Screen</title>
+  <script src="tailwind.min.js"></script>
+  <link href="css2.css" rel="stylesheet" />
+  <link href="css3.css" rel="stylesheet" />
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+  </style>
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#137fec",
+            "background-light": "#f6f7f8",
+            "background-dark": "#101922",
+          },
+          fontFamily: {
+            "display": ["Inter", "sans-serif"]
+          },
+          borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+        },
+      },
+    }
+  </script>
+  <style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-800 dark:text-slate-200">
+  <div class="mx-auto max-w-md">
+    <div class="relative flex min-h-screen w-full flex-col">
+      <!-- Top App Bar -->
+      <header class="sticky top-0 z-10 bg-background-light/80 dark:bg-background-dark/80 p-4 pb-2 backdrop-blur-sm">
+        <div class="flex h-12 items-center justify-between">
+          <button id="back-btn"
+            class="flex size-10 shrink-0 items-center justify-center rounded-full text-slate-800 dark:text-slate-200">
+            <span class="material-symbols-outlined text-2xl">arrow_back_ios_new</span>
+          </button>
+          <div></div> <!-- Placeholder for right side actions if any -->
+        </div>
+        <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">Settings</h1>
+      </header>
+      <main class="flex-1 px-4 py-4">
+        <div class="flex flex-col gap-8">
+          <!-- General Section -->
+          <section>
+            <h2 class="px-4 pb-2 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              GENERAL</h2>
+            <div class="overflow-hidden rounded-xl bg-white dark:bg-slate-800/50 shadow-sm">
+              <div class="flex items-center justify-between gap-4 p-4">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20">
+                    <span class="material-symbols-outlined">person</span>
+                  </div>
+                  <p class="flex-1 truncate text-base font-medium text-slate-800 dark:text-slate-200">Manage Account</p>
+                </div>
+                <div class="shrink-0">
+                  <span class="material-symbols-outlined text-slate-400 dark:text-slate-500">chevron_right</span>
+                </div>
+              </div>
+              <hr class="border-slate-200/60 dark:border-slate-700/60" />
+              <div class="flex items-center justify-between gap-4 p-4">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20">
+                    <span class="material-symbols-outlined">notifications</span>
+                  </div>
+                  <p class="flex-1 truncate text-base font-medium text-slate-800 dark:text-slate-200">Notifications</p>
+                </div>
+                <div class="shrink-0">
+                  <label
+                    class="relative flex h-[28px] w-[50px] cursor-pointer items-center rounded-full bg-slate-200 p-1 transition-colors duration-300 ease-in-out has-[:checked]:bg-primary dark:bg-slate-700">
+                    <div
+                      class="h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-300 ease-in-out has-[:checked]:translate-x-[22px]">
+                    </div>
+                    <input id="notifications-toggle" checked="" class="invisible absolute" type="checkbox" />
+                  </label>
+                </div>
+              </div>
+              <hr class="border-slate-200/60 dark:border-slate-700/60" />
+              <div class="flex items-center justify-between gap-4 p-4">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20">
+                    <span class="material-symbols-outlined">language</span>
+                  </div>
+                  <p class="flex-1 truncate text-base font-medium text-slate-800 dark:text-slate-200">Language</p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <span class="text-sm text-slate-500 dark:text-slate-400">English</span>
+                  <span class="material-symbols-outlined text-slate-400 dark:text-slate-500">chevron_right</span>
+                </div>
+              </div>
+            </div>
+          </section>
+          <!-- Appearance Section -->
+          <section>
+            <h2 class="px-4 pb-2 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              APPEARANCE</h2>
+            <div class="overflow-hidden rounded-xl bg-white dark:bg-slate-800/50 shadow-sm">
+              <div class="flex items-center justify-between gap-4 p-4">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20">
+                    <span class="material-symbols-outlined">dark_mode</span>
+                  </div>
+                  <p class="flex-1 truncate text-base font-medium text-slate-800 dark:text-slate-200">Dark Mode</p>
+                </div>
+                <div class="shrink-0">
+                  <label
+                    class="relative flex h-[28px] w-[50px] cursor-pointer items-center rounded-full bg-slate-200 p-1 transition-colors duration-300 ease-in-out has-[:checked]:bg-primary dark:bg-slate-700">
+                    <div
+                      class="h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-300 ease-in-out has-[:checked]:translate-x-[22px]">
+                    </div>
+                    <input id="dark-mode-toggle" class="invisible absolute" type="checkbox" />
+                  </label>
+                </div>
+              </div>
+              <hr class="border-slate-200/60 dark:border-slate-700/60" />
+              <div class="flex items-center justify-between gap-4 p-4">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20">
+                    <span class="material-symbols-outlined">palette</span>
+                  </div>
+                  <p class="flex-1 truncate text-base font-medium text-slate-800 dark:text-slate-200">Color Theme</p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <div class="size-5 rounded-full bg-primary"></div>
+                  <span class="material-symbols-outlined text-slate-400 dark:text-slate-500">chevron_right</span>
+                </div>
+              </div>
+              <hr class="border-slate-200/60 dark:border-slate-700/60" />
+              <div class="flex items-center justify-between gap-4 p-4">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20">
+                    <span class="material-symbols-outlined">text_fields</span>
+                  </div>
+                  <p class="flex-1 truncate text-base font-medium text-slate-800 dark:text-slate-200">Text Size</p>
+                </div>
+                <div class="shrink-0">
+                  <span class="material-symbols-outlined text-slate-400 dark:text-slate-500">chevron_right</span>
+                </div>
+              </div>
+            </div>
+          </section>
+          <!-- AI Tagging Section -->
+          <section>
+            <h2 class="px-4 pb-2 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">AI
+              TAGGING</h2>
+            <div class="overflow-hidden rounded-xl bg-white dark:bg-slate-800/50 shadow-sm">
+              <div class="flex items-center justify-between gap-4 p-4">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20">
+                    <span class="material-symbols-outlined">auto_awesome</span>
+                  </div>
+                  <p class="flex-1 truncate text-base font-medium text-slate-800 dark:text-slate-200">Enable
+                    Auto-Tagging</p>
+                </div>
+                <div class="shrink-0">
+                  <label
+                    class="relative flex h-[28px] w-[50px] cursor-pointer items-center rounded-full bg-slate-200 p-1 transition-colors duration-300 ease-in-out has-[:checked]:bg-primary dark:bg-slate-700">
+                    <div
+                      class="h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-300 ease-in-out has-[:checked]:translate-x-[22px]">
+                    </div>
+                    <input id="ai-tagging-toggle" checked="" class="invisible absolute" type="checkbox" />
+                  </label>
+                </div>
+              </div>
+              <hr class="border-slate-200/60 dark:border-slate-700/60" />
+              <div class="flex flex-col gap-2 p-4">
+                <label class="text-base font-medium text-slate-800 dark:text-slate-200" for="api-key">API Key</label>
+                <input
+                  class="w-full rounded-lg border-slate-300 bg-slate-100 p-3 text-sm text-slate-800 placeholder-slate-400 transition focus:border-primary focus:ring-2 focus:ring-primary/50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-500"
+                  id="api-key" placeholder="Enter your API key" type="text" />
+              </div>
+              <hr class="border-slate-200/60 dark:border-slate-700/60" />
+              <div class="flex items-center justify-between gap-4 p-4">
+                <div class="flex items-center gap-4">
+                  <div
+                    class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary dark:bg-primary/20">
+                    <span class="material-symbols-outlined">percent</span>
+                  </div>
+                  <p class="flex-1 truncate text-base font-medium text-slate-800 dark:text-slate-200">Tagging Confidence
+                  </p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <span class="text-sm text-slate-500 dark:text-slate-400">90%</span>
+                  <span class="material-symbols-outlined text-slate-400 dark:text-slate-500">chevron_right</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+
+</html>

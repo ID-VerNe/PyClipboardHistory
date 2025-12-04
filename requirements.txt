@@ -5,3 +5,4 @@ screeninfo
 openai
 google-generativeai
 pywin32
+pywebview
