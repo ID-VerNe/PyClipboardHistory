@@ -227,7 +227,7 @@ class ClipboardApp:
             def callback(hwnd, hwnds):
                 if win32gui.IsWindowVisible(hwnd):
                     title = win32gui.GetWindowText(hwnd)
-                    if "Clipboard Home Screen" in title:  # pywebview 窗口标题
+                    if "PyClipboardHistory" in title:  # pywebview 窗口标题
                         hwnds.append(hwnd)
                 return True
             

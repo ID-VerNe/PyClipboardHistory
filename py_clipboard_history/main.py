@@ -86,45 +86,70 @@ def main():
             try:
                 import win32gui
                 import win32con
-                from PIL import Image
                 import win32api
+                import ctypes
+                from ctypes import wintypes
                 
                 # Find the window by title
                 def find_window(title):
                     hwnd = win32gui.FindWindow(None, title)
                     return hwnd if hwnd != 0 else None
                 
-                # Wait a bit for window to be created
+                # Wait for window to be created
                 import time
-                time.sleep(0.5)
+                time.sleep(1.0)
                 
                 hwnd = find_window('PyClipboardHistory')
                 if hwnd:
+                    logging.info(f"Found window handle: {hwnd}")
+                    
                     # Load icon - use .ico format for Windows
                     icon_path = str(config.ICON_PATH).replace('.png', '.ico')
+                    logging.info(f"Loading icon from: {icon_path}")
+                    
                     if os.path.exists(icon_path):
-                        # Load icon using Windows API
-                        # Note: For proper icon display, we should use .ico format
-                        # But we'll try to load the PNG and convert if needed
                         try:
-                            # Try to load as icon file
-                            hicon = win32gui.LoadImage(
+                            # Load small icon (16x16) for title bar
+                            hicon_small = win32gui.LoadImage(
                                 0, 
                                 icon_path,
                                 win32con.IMAGE_ICON,
-                                0, 0,
-                                win32con.LR_LOADFROMFILE | win32con.LR_DEFAULTSIZE
+                                16, 16,
+                                win32con.LR_LOADFROMFILE
                             )
-                            if hicon:
-                                # Set icon for title bar
-                                win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_SMALL, hicon)
-                                # Set icon for taskbar
-                                win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_BIG, hicon)
+                            
+                            # Load large icon (32x32) for taskbar and Alt+Tab
+                            hicon_large = win32gui.LoadImage(
+                                0, 
+                                icon_path,
+                                win32con.IMAGE_ICON,
+                                32, 32,
+                                win32con.LR_LOADFROMFILE
+                            )
+                            
+                            logging.info(f"Icon handles: small={hicon_small}, large={hicon_large}")
+                            
+                            if hicon_small:
+                                win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_SMALL, hicon_small)
+                                logging.info("Small icon set")
+                            
+                            if hicon_large:
+                                win32gui.SendMessage(hwnd, win32con.WM_SETICON, win32con.ICON_BIG, hicon_large)
+                                logging.info("Large icon set")
+                            
+                            if hicon_small or hicon_large:
                                 logging.info("Window icon set successfully")
-                        except:
-                            logging.warning(f"Failed to set icon from {icon_path}")
+                            else:
+                                logging.warning("Failed to load icon handles")
+                                
+                        except Exception as e:
+                            logging.warning(f"Failed to set icon: {e}", exc_info=True)
+                    else:
+                        logging.warning(f"Icon file not found: {icon_path}")
+                else:
+                    logging.warning("Could not find window handle")
             except Exception as e:
-                logging.warning(f"Could not set window icon: {e}")
+                logging.warning(f"Could not set window icon: {e}", exc_info=True)
         
         # Run icon setting in a thread to not block
         import threading
