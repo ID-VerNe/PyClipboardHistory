@@ -1,76 +1,45 @@
-# PyClipboardHistory
+# PyClipboardHistory (Refactored to Electron)
 
-A feature-rich, AI-powered clipboard history manager for Windows, built with Python and Tkinter.
+这是一个重构后的剪贴板历史管理器，原本使用 Python + pywebview 开发，现在完全迁移到了 **React + Electron (Vite) + Tailwind CSS**.
 
-This tool enhances your productivity by providing a searchable, filterable, and previewable history of everything you copy. It supports text, images, and file paths, and leverages AI for automatic tagging of text content.
+## 核心特性
 
-![App Screenshot](https://wechat.likesyou.org/2025-10-06_232639.jpg)  <!-- It is recommended to replace this with a real screenshot URL -->
+- **跨平台支持**：基于 Electron，支持 Windows (目前优化最好)。
+- **现代 UI**：使用 React 和 Tailwind CSS 构建，支持暗色模式（跟随系统）。
+- **剪贴板监控**：自动保存文本和图片。
+- **智能分类**：集成 OpenAI API，自动为剪贴板内容打标签。
+- **图片预览**：自动生成缩略图，占用空间小。
+- **全局快捷键**：`Ctrl + Alt + V` 快速唤起。
+- **跟随鼠标**：窗口在鼠标位置弹出，即用即走。
 
-## ✨ Core Features
+## 技术栈
 
-- **Multi-Format History**: Automatically captures text, images, and copied file paths.
-- **Instant Search & Filter**: A real-time search box and category filters (All, Favorites, Text, Image, Files) help you find entries instantly.
-- **Keyword Highlighting**: Search terms are highlighted in the results for quick identification.
-- **Hover-to-Preview**: Simply hover over an entry to see its full content—text or image—in a smart-positioned popup.
-- **AI Auto-Tagging**: Automatically classifies and adds relevant tags to copied text snippets (configurable, supports OpenAI/Gemini).
-- **Favorites**: Mark important entries as favorites (⭐) for easy access.
-- **Global Hotkey**: Summon or hide the application window from anywhere with a global hotkey (`Ctrl+Alt+V`).
-- **Modern UX**: Features like auto-hide on focus loss and intelligent window positioning provide a smooth, modern user experience.
-- **Highly Configurable**: Customize AI providers, models, and UI colors through a user-friendly settings menu.
-- **System Tray Integration**: Minimizes to the system tray for unobtrusive background operation.
+- **前端**: React, Tailwind CSS, Lucide Icons
+- **后端 (Main Process)**: Electron, better-sqlite3 (高性能数据库), sharp (极速图像处理)
+- **构建工具**: electron-vite
 
-## 🛠️ Tech Stack
+## 开始使用
 
-- **GUI**: Python's built-in `tkinter` library, with `ttk` for modern widgets.
-- **Clipboard Monitoring**: A custom polling mechanism using `pywin32` for robust, multi-format clipboard access on Windows.
-- **Global Hotkeys**: `pynput`
-- **Image Handling**: `Pillow` (PIL Fork)
-- **System Tray Icon**: `pystray`
-- **Multi-Monitor Support**: `screeninfo`
-- **AI Integration**: `openai`, `google-generativeai`
+### 开发环境
 
-## 🚀 Getting Started
+1. 确保已安装 [Node.js](https://nodejs.org/)。
+2. 安装 pnpm: `npm install -g pnpm`
+3. 安装依赖: `pnpm install`
+4. 运行开发服务器: `pnpm run dev`
 
-### Prerequisites
+### 生产打包
 
-- Python 3.10+ 
+生成安装包:
+```bash
+pnpm run build    # 仅构建输出 (out/)
+pnpm run package  # 构建并打包为可移植可执行文件 (dist/)
+```
 
-### Installation & Usage
+## 注意事项
 
-1.  **Clone the repository or download the source code.**
+- 图片和数据库存储在可执行文件所在目录（而非系统 AppData）。
+- 首次安装可能需要编译 `better-sqlite3` 和 `sharp` 等原生模块。
 
-2.  **Set up the virtual environment:**
-    ```bash
-    # Create a virtual environment
-    python -m venv .venv
-    
-    # Activate it
-    # On Windows
-    .venv\Scripts\activate
-    ```
+## 备份
 
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt 
-    # Note: You may need to create a requirements.txt file first by running:
-    # pip freeze > requirements.txt
-    ```
-
-4.  **Run the application:**
-
-    Simply double-click the `start_app.bat` file in the project root. 
-    
-    This script will request administrator privileges (required for the global hotkey to work everywhere) and launch the application in the background. You will see its icon appear in the system tray.
-
-## ⚙️ Configuration
-
-- To open the settings menu, right-click the system tray icon and select "Settings", or click the "Settings" button in the main application window.
-- **AI Tagging**: To use AI features, you must enable it in the settings and provide your own API key for either OpenAI or Gemini.
-- **Appearance**: All UI colors, including the search highlight color, can be customized in the "Appearance" tab.
-
-## 📄 License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-*Crafted by VerNe, 2025-10-06*
+原始的 Python 代码已移动到 `_legacy_python_version` 文件夹中。

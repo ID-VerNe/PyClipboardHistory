@@ -1,0 +1,68 @@
+{
+  "name": "py-clipboard-history-refactored",
+  "version": "1.0.0",
+  "description": "Clipboard History Manager Refactored in Electron",
+  "main": "./out/main/index.js",
+  "author": "Gemini",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps",
+    "package": "electron-vite build && electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.gemini.clipboard",
+    "productName": "PyClipboardHistory",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ],
+      "icon": "resources/icon.png"
+    },
+    "portable": {
+      "artifactName": "${productName}_Portable.${ext}",
+      "requestExecutionLevel": "user"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sharp/**/*",
+      "**/node_modules/better-sqlite3/**/*"
+    ]
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "^3.0.0",
+    "@electron-toolkit/utils": "^3.0.0",
+    "better-sqlite3": "^9.4.0",
+    "clsx": "^2.1.0",
+    "fs-extra": "^11.2.0",
+    "lucide-react": "^0.330.0",
+    "openai": "^4.28.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "sharp": "^0.33.2",
+    "tailwind-merge": "^2.2.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "electron": "^29.1.0",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "vite": "^5.1.0"
+  }
+}

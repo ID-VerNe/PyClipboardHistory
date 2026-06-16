@@ -1,0 +1,8 @@
+packages:
+  - '.'
+
+ignoredBuiltDependencies:
+  - better-sqlite3
+  - electron
+  - esbuild
+  - sharp
