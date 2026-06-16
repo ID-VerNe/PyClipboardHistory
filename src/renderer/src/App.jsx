@@ -87,6 +87,9 @@ export default function App() {
   const searchInputRef = useRef(null)
   const observerTarget = useRef(null)
   const listRef = useRef(null)
+  const optimisticToggleRef = useRef(null)
+  const optimisticDeleteRef = useRef(null)
+  const processingRef = useRef(new Set())
 
   const loadHistory = useCallback(async (isNextPage = false) => {
     if (loading) return
@@ -145,7 +148,6 @@ export default function App() {
       setSearch('')
       setDebouncedSearch('')
       setFilter('All')
-      loadHistory(false)
       if (listRef.current) listRef.current.scrollTop = 0
       setTimeout(() => searchInputRef.current?.focus(), 100)
     })
@@ -168,17 +170,52 @@ export default function App() {
   }, [loadHistory])
 
   const handlePaste = useCallback((item) => {
-    window.api.pasteItem(item.content, item.data_type)
+    window.api.pasteItem(item.content, item.data_type).catch(err => {
+      console.error('Failed to paste item:', err)
+    })
   }, [])
 
   const toggleFav = useCallback(async (id) => {
-    await window.api.toggleFavorite(id)
-    setHistory(prev => prev.map(item => item.id === id ? { ...item, is_favorite: !item.is_favorite } : item))
+    if (processingRef.current.has(id)) return
+    processingRef.current.add(id)
+    let prevState
+    setHistory(prev => {
+      const item = prev.find(item => item.id === id)
+      prevState = item?.is_favorite
+      return prev.map(item => item.id === id ? { ...item, is_favorite: !item.is_favorite } : item)
+    })
+    try {
+      await window.api.toggleFavorite(id)
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err)
+      setHistory(prev => prev.map(item => item.id === id ? { ...item, is_favorite: prevState } : item))
+    } finally {
+      processingRef.current.delete(id)
+    }
   }, [])
 
   const deleteItem = useCallback(async (id) => {
-    await window.api.deleteEntry(id)
-    setHistory(prev => prev.filter(item => item.id !== id))
+    if (processingRef.current.has(id)) return
+    processingRef.current.add(id)
+    let deletedItem
+    setHistory(prev => {
+      const item = prev.find(item => item.id === id)
+      deletedItem = item || undefined
+      return prev.filter(item => item.id !== id)
+    })
+    try {
+      await window.api.deleteEntry(id)
+    } catch (err) {
+      console.error('Failed to delete entry:', err)
+      if (deletedItem) {
+        setHistory(prev => {
+          if (prev.some(item => item.id === id)) return prev
+          return [...prev, deletedItem].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        })
+      }
+    } finally {
+      processingRef.current.delete(id)
+    }
   }, [])
 
   const formatTimestamp = useCallback((ts) => {
