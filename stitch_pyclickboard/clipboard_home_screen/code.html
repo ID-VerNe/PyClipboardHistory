@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Clipboard Home Screen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,0" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill-1 {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#007AFF",
+              "background-light": "#F2F2F7",
+              "background-dark": "#1C1C1E",
+              "card-light": "#FFFFFF",
+              "card-dark": "#2C2C2E",
+              "text-primary-light": "#000000",
+              "text-primary-dark": "#FFFFFF",
+              "text-secondary-light": "#8E8E93",
+              "text-secondary-dark": "#8E8E93",
+              "icon-light": "#000000",
+              "icon-dark": "#FFFFFF",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {
+              "DEFAULT": "0.5rem",
+              "lg": "0.75rem",
+              "xl": "1rem",
+              "full": "9999px"
+            },
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+<div class="relative mx-auto flex h-auto min-h-screen w-full max-w-md flex-col overflow-x-hidden">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-10 flex flex-col bg-background-light/80 pt-4 backdrop-blur-sm dark:bg-background-dark/80">
+<div class="flex items-center px-4 pb-3">
+<h1 class="flex-1 text-3xl font-bold text-text-primary-light dark:text-text-primary-dark">Clipboard</h1>
+<button class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-zinc-200/50 text-icon-light dark:bg-zinc-700/50 dark:text-icon-dark">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<!-- Search Bar -->
+<div class="px-4 pb-3">
+<label class="flex h-11 w-full flex-col">
+<div class="flex h-full w-full flex-1 items-stretch rounded-lg">
+<div class="flex items-center justify-center rounded-l-lg bg-zinc-200/80 pl-3.5 text-text-secondary-light dark:bg-zinc-700/80 dark:text-text-secondary-dark">
+<span class="material-symbols-outlined text-xl">search</span>
+</div>
+<input class="form-input flex min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg border-none bg-zinc-200/80 px-2 text-base font-normal leading-normal text-text-primary-light placeholder:text-text-secondary-light focus:outline-0 focus:ring-0 dark:bg-zinc-700/80 dark:text-text-primary-dark dark:placeholder:text-text-secondary-dark" placeholder="Search clipboard..." value=""/>
+</div>
+</label>
+</div>
+</header>
+<!-- Clipboard List -->
+<main class="flex flex-1 flex-col gap-4 p-4">
+<!-- List Item 1 -->
+<div class="flex items-center gap-4 rounded-xl bg-card-light p-4 shadow-sm dark:bg-card-dark">
+<div class="flex flex-1 items-center gap-4 overflow-hidden">
+<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-background-light dark:bg-background-dark">
+<span class="material-symbols-outlined text-2xl text-text-primary-light dark:text-text-primary-dark">language</span>
+</div>
+<div class="flex min-w-0 flex-1 flex-col justify-center">
+<p class="truncate text-base font-medium text-text-primary-light dark:text-text-primary-dark">https://apple.com/iphone-15-pro/</p>
+<p class="truncate text-sm font-normal text-text-secondary-light dark:text-text-secondary-dark">From Safari • 5m ago</p>
+</div>
+</div>
+<div class="flex shrink-0 items-center gap-2">
+<button class="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary-light dark:text-text-secondary-dark">
+<span class="material-symbols-outlined text-2xl">star</span>
+</button>
+<button class="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary-light dark:text-text-secondary-dark">
+<span class="material-symbols-outlined text-2xl">delete</span>
+</button>
+</div>
+</div>
+<!-- List Item 2 -->
+<div class="flex items-center gap-4 rounded-xl bg-card-light p-4 shadow-sm dark:bg-card-dark">
+<div class="flex flex-1 items-center gap-4 overflow-hidden">
+<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-background-light dark:bg-background-dark">
+<span class="material-symbols-outlined text-2xl text-text-primary-light dark:text-text-primary-dark">edit_note</span>
+</div>
+<div class="flex min-w-0 flex-1 flex-col justify-center">
+<p class="truncate text-base font-medium text-text-primary-light dark:text-text-primary-dark">Design meeting notes for the new project initiative...</p>
+<p class="truncate text-sm font-normal text-text-secondary-light dark:text-text-secondary-dark">From Notes • 1h ago</p>
+</div>
+</div>
+<div class="flex shrink-0 items-center gap-2">
+<button class="flex h-9 w-9 items-center justify-center rounded-full text-primary">
+<span class="material-symbols-outlined fill-1 text-2xl">star</span>
+</button>
+<button class="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary-light dark:text-text-secondary-dark">
+<span class="material-symbols-outlined text-2xl">delete</span>
+</button>
+</div>
+</div>
+<!-- List Item 3 -->
+<div class="flex items-center gap-4 rounded-xl bg-card-light p-4 shadow-sm dark:bg-card-dark">
+<div class="flex flex-1 items-center gap-4 overflow-hidden">
+<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-background-light dark:bg-background-dark">
+<span class="material-symbols-outlined text-2xl text-text-primary-light dark:text-text-primary-dark">sms</span>
+</div>
+<div class="flex min-w-0 flex-1 flex-col justify-center">
+<p class="truncate text-base font-medium text-text-primary-light dark:text-text-primary-dark">Let's catch up tomorrow at 10 AM.</p>
+<p class="truncate text-sm font-normal text-text-secondary-light dark:text-text-secondary-dark">From Messages • 2h ago</p>
+</div>
+</div>
+<div class="flex shrink-0 items-center gap-2">
+<button class="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary-light dark:text-text-secondary-dark">
+<span class="material-symbols-outlined text-2xl">star</span>
+</button>
+<button class="flex h-9 w-9 items-center justify-center rounded-full text-text-secondary-light dark:text-text-secondary-dark">
+<span class="material-symbols-outlined text-2xl">delete</span>
+</button>
+</div>
+</div>
+<!-- Empty State -->
+<div class="hidden flex-1 flex-col items-center justify-center space-y-4 p-8 text-center">
+<div class="flex h-20 w-20 items-center justify-center rounded-full bg-card-light dark:bg-card-dark">
+<span class="material-symbols-outlined text-4xl text-text-secondary-light dark:text-text-secondary-dark">content_paste_off</span>
+</div>
+<div class="space-y-1">
+<h3 class="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark">Your Clipboard is Empty</h3>
+<p class="text-sm text-text-secondary-light dark:text-text-secondary-dark">Items you copy will appear here.</p>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<div class="sticky bottom-6 right-6 flex justify-end pr-4">
+<button class="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+</div>
+</div>
+</body></html>
