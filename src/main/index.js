@@ -1,14 +1,14 @@
-import { app, shell, BrowserWindow, ipcMain, clipboard, globalShortcut, Tray, Menu, screen, nativeImage, protocol, net, powerSaveBlocker } from 'electron'
-import { join, dirname, normalize } from 'path'
+import { app, shell, BrowserWindow, ipcMain, clipboard, globalShortcut, Tray, Menu, screen, nativeImage, protocol, powerSaveBlocker } from 'electron'
+import { join, dirname, normalize, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset' 
 import db from './db'
-import { classifyText } from './ai'
 import crypto from 'crypto'
 import fs from 'fs-extra'
-import { pathToFileURL } from 'url'
 import { Worker } from 'worker_threads'
 import os from 'os'
+
+let nextRequestId = 0
 
 // --- Performance & Memory Optimization ---
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
@@ -22,7 +22,7 @@ try {
 }
 
 app.whenReady().then(() => {
-  powerSaveBlocker.start('prevent-app-suspension')
+  powerSaveBlockerId = powerSaveBlocker.start('prevent-app-suspension')
 })
 
 // --- Path Configuration ---
@@ -43,6 +43,7 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let settings = { aiEnabled: false, aiApiKey: '', aiModel: 'gpt-4o-mini' }
+let powerSaveBlockerId
 try {
   if (fs.existsSync(SETTINGS_PATH)) settings = { ...settings, ...fs.readJsonSync(SETTINGS_PATH) }
 } catch (err) {
@@ -71,7 +72,9 @@ function createWindow() {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false
     }
   })
   mainWindow.on('blur', () => mainWindow.hide())
@@ -120,15 +123,15 @@ let lastImageInfo = { width: 0, height: 0, byteLength: 0 }
 let lastTextHash = ''
 
 function processImage(buffer, imgPath, thumbPath) {
+  const requestId = nextRequestId++
   return new Promise((resolve, reject) => {
     const handler = (msg) => {
+      if (msg.id !== requestId) return
+      imageWorker.off('message', handler)
+      imageWorker.off('error', errorHandler)
       if (msg.success) {
-        imageWorker.off('message', handler)
-        imageWorker.off('error', errorHandler)
         resolve(msg.base64)
       } else {
-        imageWorker.off('message', handler)
-        imageWorker.off('error', errorHandler)
         reject(new Error(msg.error))
       }
     }
@@ -139,7 +142,7 @@ function processImage(buffer, imgPath, thumbPath) {
     }
     imageWorker.on('message', handler)
     imageWorker.on('error', errorHandler)
-    imageWorker.postMessage({ buffer, imgPath, thumbPath })
+    imageWorker.postMessage({ id: requestId, buffer, imgPath, thumbPath })
   })
 }
 
@@ -187,9 +190,11 @@ async function checkClipboard() {
       db.addEntry('TEXT', text, hash, text.substring(0, 200))
       
       if (settings.aiEnabled && settings.aiApiKey) {
-        classifyText(text, settings.aiApiKey, 'OpenAI', settings.aiModel).then(tags => {
-          if (tags && tags.length > 0) console.log(`Classified as: ${tags.join(', ')}`)
-        }).catch(err => console.error('AI Classification Error:', err))
+        import('./ai.js').then(({ classifyText }) => {
+          classifyText(text, settings.aiApiKey, settings.aiModel).then(tags => {
+            if (tags && tags.length > 0) console.log(`Classified as: ${tags.join(', ')}`)
+          }).catch(err => console.error('AI Classification Error:', err))
+        })
       }
       if (mainWindow) mainWindow.webContents.send('history-updated')
     }
@@ -213,7 +218,14 @@ app.whenReady().then(() => {
         fullPath = fullPath.slice(1)
       }
       const normalizedPath = normalize(fullPath)
-      const buffer = await fs.readFile(normalizedPath)
+      // Security: only serve files from the images directory
+      const resolvedPath = resolve(normalizedPath)
+      const resolvedImagesDir = resolve(IMAGES_DIR)
+      if (!resolvedPath.startsWith(resolvedImagesDir)) {
+        console.error('Blocked local-file access outside images dir:', normalizedPath)
+        return new Response('Forbidden', { status: 403 })
+      }
+      const buffer = await fs.readFile(resolvedPath)
       
       if (imageCache.size >= MAX_CACHE_SIZE) {
         const firstKey = imageCache.keys().next().value
@@ -241,7 +253,19 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-history', (_, filter, query, limit, offset) => db.getHistory(filter, query, limit, offset))
   ipcMain.handle('toggle-favorite', (_, id) => db.toggleFavorite(id))
-  ipcMain.handle('delete-entry', (_, id) => db.deleteEntry(id))
+  ipcMain.handle('delete-entry', async (_, id) => {
+    // Clean up image files if this is an image entry
+    const entry = db.getById(id)
+    if (entry && entry.data_type === 'IMAGE') {
+      if (entry.content) {
+        try { await fs.remove(entry.content) } catch { /* ignore */ }
+      }
+      if (entry.thumbnail_path) {
+        try { await fs.remove(entry.thumbnail_path) } catch { /* ignore */ }
+      }
+    }
+    db.deleteEntry(id)
+  })
   ipcMain.handle('get-settings', () => settings)
   ipcMain.handle('save-settings', (_, newSettings) => {
     settings = { ...settings, ...newSettings }
@@ -250,7 +274,14 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('paste-item', async (_, content, type) => {
     if (type === 'IMAGE') {
-      const buffer = await fs.readFile(content)
+      // Security: validate path is within IMAGES_DIR
+      const resolvedPath = resolve(content)
+      const resolvedImagesDir = resolve(IMAGES_DIR)
+      if (!resolvedPath.startsWith(resolvedImagesDir)) {
+        console.error('Blocked path traversal attempt:', content)
+        return
+      }
+      const buffer = await fs.readFile(resolvedPath)
       clipboard.writeImage(nativeImage.createFromBuffer(buffer))
     } else {
       clipboard.writeText(content)
@@ -260,6 +291,15 @@ app.whenReady().then(() => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+
+  // Cleanup on quit
+  app.on('will-quit', () => {
+    imageWorker.terminate()
+    globalShortcut.unregisterAll()
+    if (powerSaveBlockerId != null) {
+      powerSaveBlocker.stop(powerSaveBlockerId)
+    }
   })
 })
 

@@ -14,6 +14,14 @@ const HistoryItem = memo(({ item, onPaste, onToggleFav, onDelete, formatTimestam
   return (
     <div
       onClick={() => onPaste(item)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onPaste(item)
+        }
+      }}
+      role="button"
+      tabIndex={0}
       className="group relative flex gap-3 p-3 bg-white dark:bg-zinc-800/40 rounded-xl border border-slate-100 dark:border-zinc-800 hover:border-brand-400 dark:hover:border-brand-600 hover:shadow-lg transition-all cursor-pointer overflow-hidden mb-3"
     >
       <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-slate-50 dark:bg-zinc-800 rounded-lg border border-slate-100 dark:border-zinc-700">
@@ -38,14 +46,14 @@ const HistoryItem = memo(({ item, onPaste, onToggleFav, onDelete, formatTimestam
             {formatTimestamp(item.timestamp)}
           </span>
         </div>
-        
+
         {item.data_type === 'IMAGE' ? (
           <div className="relative mt-1 group/img">
-            <img 
-              src={item.preview_base64 || (item.thumbnail_path ? `local-file:///${item.thumbnail_path.replace(/\\/g, '/')}` : '')} 
+            <img
+              src={item.preview_base64 || (item.thumbnail_path ? `local-file:///${item.thumbnail_path.replace(/\\/g, '/')}` : '')}
               className="max-h-40 w-auto rounded-lg border border-slate-200 dark:border-zinc-700 shadow-sm transition-transform group-hover/img:scale-[1.01]"
               loading="lazy"
-              alt="Preview"
+              alt=""
             />
           </div>
         ) : (
@@ -58,6 +66,7 @@ const HistoryItem = memo(({ item, onPaste, onToggleFav, onDelete, formatTimestam
       <div className="absolute right-2 top-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFav(item.id); }}
+          aria-label={item.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
           className={cn(
             "p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-700 transition-colors shadow-sm bg-white dark:bg-zinc-800",
             item.is_favorite ? "text-amber-500" : "text-slate-400"
@@ -67,6 +76,7 @@ const HistoryItem = memo(({ item, onPaste, onToggleFav, onDelete, formatTimestam
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+          aria-label="Delete item"
           className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shadow-sm bg-white dark:bg-zinc-800"
         >
           <Trash2 className="h-4 w-4" />
@@ -83,38 +93,55 @@ export default function App() {
   const [filter, setFilter] = useState('All')
   const [hasMore, setHasMore] = useState(true)
   const [loading, setLoading] = useState(false)
-  
+  const [initialLoad, setInitialLoad] = useState(true)
+  const [error, setError] = useState(null)
+
   const searchInputRef = useRef(null)
   const observerTarget = useRef(null)
   const listRef = useRef(null)
+  const loadHistoryRef = useRef(null)
+  const historyLengthRef = useRef(0)
 
   const loadHistory = useCallback(async (isNextPage = false) => {
     if (loading) return
     setLoading(true)
+    setError(null)
 
     try {
-      const offset = isNextPage ? history.length : 0
+      const offset = isNextPage ? historyLengthRef.current : 0
       const data = await window.api.getHistory(filter, debouncedSearch, PAGE_SIZE, offset)
-      
+
       if (isNextPage) {
-        setHistory(prev => [...prev, ...data])
+        setHistory(prev => {
+          const newHistory = [...prev, ...data]
+          historyLengthRef.current = newHistory.length
+          return newHistory
+        })
       } else {
         setHistory(data)
+        historyLengthRef.current = data.length
       }
       setHasMore(data.length === PAGE_SIZE)
     } catch (err) {
       console.error('Failed to load history:', err)
+      setError('Failed to load clipboard history. Please try again.')
     } finally {
       setLoading(false)
+      setInitialLoad(false)
     }
-  }, [filter, debouncedSearch, history.length, loading])
+  }, [filter, debouncedSearch])
 
-  // Infinite scroll observer
+  // Keep ref in sync with latest loadHistory
+  useEffect(() => {
+    loadHistoryRef.current = loadHistory
+  })
+
+  // Infinite scroll observer — stable ref avoids resubscribing on every page load
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && hasMore && !loading) {
-          loadHistory(true)
+          loadHistoryRef.current(true)
         }
       },
       { threshold: 0.1 }
@@ -125,11 +152,12 @@ export default function App() {
     }
 
     return () => observer.disconnect()
-  }, [hasMore, loading, loadHistory])
+  }, [hasMore, loading])
 
   // Initial load and filter change
   useEffect(() => {
     loadHistory(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, debouncedSearch])
 
   // Search Debounce
@@ -145,7 +173,7 @@ export default function App() {
       setSearch('')
       setDebouncedSearch('')
       setFilter('All')
-      loadHistory(false)
+      setInitialLoad(true)
       if (listRef.current) listRef.current.scrollTop = 0
       setTimeout(() => searchInputRef.current?.focus(), 100)
     })
@@ -168,29 +196,55 @@ export default function App() {
   }, [loadHistory])
 
   const handlePaste = useCallback((item) => {
-    window.api.pasteItem(item.content, item.data_type)
+    window.api.pasteItem(item.content, item.data_type).catch(err => {
+      console.error('Failed to paste item:', err)
+    })
   }, [])
 
   const toggleFav = useCallback(async (id) => {
-    await window.api.toggleFavorite(id)
+    const prevState = history.find(item => item.id === id)?.is_favorite
     setHistory(prev => prev.map(item => item.id === id ? { ...item, is_favorite: !item.is_favorite } : item))
-  }, [])
+    try {
+      await window.api.toggleFavorite(id)
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err)
+      setHistory(prev => prev.map(item => item.id === id ? { ...item, is_favorite: prevState } : item))
+    }
+  }, [history])
 
   const deleteItem = useCallback(async (id) => {
-    await window.api.deleteEntry(id)
+    const deletedItem = history.find(item => item.id === id)
     setHistory(prev => prev.filter(item => item.id !== id))
-  }, [])
+    try {
+      await window.api.deleteEntry(id)
+    } catch (err) {
+      console.error('Failed to delete entry:', err)
+      if (deletedItem) {
+        setHistory(prev => {
+          if (prev.some(item => item.id === id)) return prev
+          return [...prev, deletedItem].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        })
+      }
+    }
+  }, [history])
 
   const formatTimestamp = useCallback((ts) => {
     const date = new Date(ts)
     const now = new Date()
     const isToday = date.toDateString() === now.toDateString()
-    
+
     if (isToday) {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
     return date.toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
   }, [])
+
+  // Determine what message to show in the empty state
+  const getEmptyMessage = () => {
+    if (debouncedSearch) return 'No results found'
+    if (filter !== 'All') return `No ${filter.toLowerCase()} items found`
+    return 'No items found'
+  }
 
   return (
     <div className="flex h-screen flex-col bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-2xl">
@@ -207,16 +261,17 @@ export default function App() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        
+
         <div className="flex gap-2">
           {['All', 'TEXT', 'IMAGE', 'Favorites'].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
+              aria-pressed={filter === f}
               className={cn(
                 "px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all",
-                filter === f 
-                  ? "bg-brand-600 text-white shadow-lg shadow-brand-500/30" 
+                filter === f
+                  ? "bg-brand-600 text-white shadow-lg shadow-brand-500/30"
                   : "bg-slate-200 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 hover:bg-slate-300 dark:hover:bg-zinc-700"
               )}
             >
@@ -228,17 +283,46 @@ export default function App() {
 
       {/* List Container */}
       <div ref={listRef} className="flex-1 overflow-y-auto p-3 custom-scrollbar">
-        {history.length === 0 ? (
+        {/* Initial loading state */}
+        {initialLoad && loading && history.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4">
             <div className="p-4 bg-slate-100 dark:bg-zinc-800 rounded-full">
               <Clipboard className="h-8 w-8 opacity-40" />
             </div>
-            <p className="text-sm font-medium opacity-60">No items found</p>
+            <div className="flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <p className="text-sm font-medium opacity-60">Loading...</p>
+            </div>
+          </div>
+        ) : /* Error state */
+        error && history.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4 p-8">
+            <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-full">
+              <Clipboard className="h-8 w-8 text-red-400" />
+            </div>
+            <p className="text-sm font-medium text-red-400 text-center">{error}</p>
+            <button
+              onClick={() => loadHistory(false)}
+              className="px-4 py-2 bg-brand-600 text-white rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-brand-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        ) : /* Empty state */
+        history.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4">
+            <div className="p-4 bg-slate-100 dark:bg-zinc-800 rounded-full">
+              <Clipboard className="h-8 w-8 opacity-40" />
+            </div>
+            <p className="text-sm font-medium opacity-60">{getEmptyMessage()}</p>
           </div>
         ) : (
           <>
             {history.map(item => (
-              <HistoryItem 
+              <HistoryItem
                 key={item.id}
                 item={item}
                 onPaste={handlePaste}
@@ -254,7 +338,7 @@ export default function App() {
           </>
         )}
       </div>
-      
+
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
