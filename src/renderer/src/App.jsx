@@ -190,6 +190,15 @@ export default function App() {
       setFilter('All')
       setInitialLoad(true)
       if (listRef.current) listRef.current.scrollTop = 0
+      // Force a fresh first-page load on every show. Setting filter/search to the
+      // same values they may already hold does NOT retrigger the load effect
+      // (React bails out on unchanged state), so items copied while the window
+      // was hidden would never appear until the user toggled a filter. Sync the
+      // refs here so loadHistory reads the intended 'All'/'' rather than the
+      // stale ref value (refs update asynchronously via their own effect).
+      filterRef.current = 'All'
+      debouncedSearchRef.current = ''
+      loadHistoryRef.current(false)
       setTimeout(() => searchInputRef.current?.focus(), 100)
     })
 
