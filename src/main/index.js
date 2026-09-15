@@ -1,64 +1,72 @@
-import { app, shell, BrowserWindow, ipcMain, clipboard, globalShortcut, Tray, Menu, screen, nativeImage, protocol, powerSaveBlocker } from 'electron'
-import { join, dirname, normalize, resolve } from 'path'
+import { app, shell, BrowserWindow, ipcMain, clipboard, globalShortcut, Tray, Menu, screen, nativeImage, protocol } from 'electron'
+import { join, normalize, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import icon from '../../resources/icon.png?asset' 
-import db from './db'
+import icon from '../../resources/icon.png?asset'
+import db, { closeDb, DATA_DIR, IMAGES_DIR, THUMBS_DIR } from './db'
 import crypto from 'crypto'
 import fs from 'fs-extra'
 import { Worker } from 'worker_threads'
-import os from 'os'
 
 let nextRequestId = 0
 
-// --- Performance & Memory Optimization ---
-app.commandLine.appendSwitch('disable-renderer-backgrounding')
-app.commandLine.appendSwitch('disable-background-timer-throttling')
-app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
-
-try {
-  os.setPriority(os.constants.priority.PRIORITY_HIGH)
-} catch (err) {
-  console.warn('Could not set high process priority:', err)
+// Single instance lock — avoid multiple pollers / workers / SQLite writers.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
 }
-
-app.whenReady().then(() => {
-  powerSaveBlockerId = powerSaveBlocker.start('prevent-app-suspension')
+app.on('second-instance', () => {
+  if (mainWindow) showWindow()
 })
 
-// --- Path Configuration ---
-const getStorageRoot = () => {
-  if (app.isPackaged) return dirname(app.getPath('exe'))
-  return app.getAppPath()
-}
-const STORAGE_ROOT = getStorageRoot()
-const DATA_DIR = join(STORAGE_ROOT, 'storage')
-const IMAGES_DIR = join(DATA_DIR, 'images')
-const THUMBS_DIR = join(IMAGES_DIR, 'thumbnails')
-const SETTINGS_PATH = join(DATA_DIR, 'settings.json')
-
-fs.ensureDirSync(THUMBS_DIR)
-
+// local-file protocol must be registered before ready.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'local-file', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
 ])
 
-let settings = { aiEnabled: false, aiApiKey: '', aiModel: 'gpt-4o-mini' }
-let powerSaveBlockerId
-try {
-  if (fs.existsSync(SETTINGS_PATH)) settings = { ...settings, ...fs.readJsonSync(SETTINGS_PATH) }
-} catch (err) {
-  console.error('Failed to load settings:', err)
-}
-
-function saveSettings() { fs.writeJsonSync(SETTINGS_PATH, settings) }
-
 let mainWindow
 let tray
+let imageWorker = null
+let clipboardInterval
 
-// --- Image Worker Initialization ---
-const workerPath = join(__dirname, 'imageWorker.js')
-const imageWorker = new Worker(workerPath)
-imageWorker.on('error', (err) => console.error('Image Worker Error:', err))
+// --- Image worker: shared message handler, O(1) dispatch by request id ---
+const pendingRequests = new Map()
+
+function getImageWorker() {
+  if (imageWorker) return imageWorker
+  const workerPath = join(__dirname, 'imageWorker.js')
+  imageWorker = new Worker(workerPath)
+  imageWorker.on('message', (msg) => {
+    const req = pendingRequests.get(msg.id)
+    if (!req) return
+    pendingRequests.delete(msg.id)
+    clearTimeout(req.timeout)
+    if (msg.success) req.resolve({ hash: msg.hash, imgPath: msg.imgPath, thumbPath: msg.thumbPath })
+    else req.reject(new Error(msg.error))
+  })
+  imageWorker.on('error', (err) => {
+    console.error('Image Worker Error:', err)
+    // Reject all pending with the same error.
+    for (const req of pendingRequests.values()) {
+      clearTimeout(req.timeout)
+      req.reject(err)
+    }
+    pendingRequests.clear()
+  })
+  return imageWorker
+}
+
+function processImage(bitmap, width, height, imgPath, thumbPath) {
+  const worker = getImageWorker()
+  const requestId = nextRequestId++
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingRequests.delete(requestId)
+      reject(new Error('Image worker timeout'))
+    }, 30000)
+    pendingRequests.set(requestId, { resolve, reject, timeout })
+    // Transfer the underlying ArrayBuffer to avoid a structured-clone copy.
+    worker.postMessage({ id: requestId, bitmap, width, height, imgPath, thumbPath }, [bitmap.buffer])
+  })
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -66,7 +74,7 @@ function createWindow() {
     height: 800,
     show: false,
     autoHideMenuBar: true,
-    frame: false, 
+    frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -77,7 +85,8 @@ function createWindow() {
       nodeIntegration: false
     }
   })
-  mainWindow.on('blur', () => mainWindow.hide())
+  mainWindow.on('closed', () => { mainWindow = null })
+  mainWindow.on('blur', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide() })
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
@@ -90,7 +99,14 @@ function createWindow() {
   }
 }
 
+function notifyHistoryUpdated(entry) {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+    mainWindow.webContents.send('history-updated', entry)
+  }
+}
+
 function showWindow() {
+  if (!mainWindow) return
   const { x, y } = screen.getCursorScreenPoint()
   const display = screen.getDisplayNearestPoint({ x, y })
   let winX = x - 210
@@ -118,99 +134,98 @@ function createTray() {
   tray.on('click', () => showWindow())
 }
 
-// --- Clipboard Monitoring with Robust Error Handling ---
+// --- Clipboard Monitoring ---
 let lastImageInfo = { width: 0, height: 0, byteLength: 0 }
 let lastTextHash = ''
 
-function processImage(buffer, imgPath, thumbPath) {
-  const requestId = nextRequestId++
-  return new Promise((resolve, reject) => {
-    const handler = (msg) => {
-      if (msg.id !== requestId) return
-      imageWorker.off('message', handler)
-      imageWorker.off('error', errorHandler)
-      if (msg.success) {
-        resolve(msg.base64)
-      } else {
-        reject(new Error(msg.error))
-      }
-    }
-    const errorHandler = (err) => {
-      imageWorker.off('message', handler)
-      imageWorker.off('error', errorHandler)
-      reject(err)
-    }
-    imageWorker.on('message', handler)
-    imageWorker.on('error', errorHandler)
-    imageWorker.postMessage({ id: requestId, buffer, imgPath, thumbPath })
-  })
-}
-
 async function checkClipboard() {
   try {
+    const formats = clipboard.availableFormats()
+    const hasImage = formats.includes('image/png') || formats.includes('image/bmp') || formats.includes('image/jpeg')
+
+    if (hasImage) {
+      const image = clipboard.readImage()
+      if (!image.isEmpty()) {
+        const size = image.getSize()
+
+        // Cheap fast-path: if dimensions match the last image, skip the heavy bitmap entirely.
+        if (size.width === lastImageInfo.width && size.height === lastImageInfo.height) {
+          return
+        }
+
+        const bitmap = image.getBitmap()
+        if (!bitmap || bitmap.length === 0) return
+
+        if (bitmap.length === lastImageInfo.byteLength &&
+            size.width === lastImageInfo.width &&
+            size.height === lastImageInfo.height) {
+          return
+        }
+        lastImageInfo = { width: size.width, height: size.height, byteLength: bitmap.length }
+
+        const timestamp = Date.now()
+        const imgPath = join(IMAGES_DIR, `img_${timestamp}.png`)
+        const thumbPath = join(THUMBS_DIR, `thumb_${timestamp}.webp`)
+
+        // PNG encode + hash + thumbnails happen in the worker; main thread stays free.
+        const result = await processImage(bitmap, size.width, size.height, imgPath, thumbPath)
+        const existing = db.getByHash(result.hash)
+        if (existing) {
+          db.updateTimestamp(existing.id)
+          // Remove the just-written files — this content already has its own on disk.
+          try { await fs.remove(result.imgPath) } catch {}
+          try { await fs.remove(result.thumbPath) } catch {}
+          const entry = db.getById(existing.id)
+          notifyHistoryUpdated(entry)
+          return
+        }
+
+        const newId = db.addEntry('IMAGE', result.imgPath, result.hash, '[Image]', result.thumbPath)
+        const entry = db.getById(newId)
+        notifyHistoryUpdated(entry)
+        return
+      }
+    }
+
     const text = clipboard.readText()
-    const image = clipboard.readImage()
-    
-    if (!image.isEmpty()) {
-      const size = image.getSize()
-      const bitmap = image.getBitmap()
-      
-      if (!bitmap || bitmap.length === 0) return // Safety check
-
-      if (size.width === lastImageInfo.width && 
-          size.height === lastImageInfo.height && 
-          bitmap.length === lastImageInfo.byteLength) {
-        return
-      }
-      lastImageInfo = { width: size.width, height: size.height, byteLength: bitmap.length }
-
-      const bitmapHash = crypto.createHash('md5').update(bitmap).digest('hex')
-      const existing = db.getByHash(bitmapHash)
-      
-      if (existing) {
-        db.updateTimestamp(existing.id)
-        if (mainWindow) mainWindow.webContents.send('history-updated')
-        return
-      }
-      
-      const buffer = image.toPNG()
-      const timestamp = Date.now()
-      const imgPath = join(IMAGES_DIR, `img_${timestamp}.png`)
-      const thumbPath = join(THUMBS_DIR, `thumb_${timestamp}.png`)
-      
-      const base64 = await processImage(buffer, imgPath, thumbPath)
-      db.addEntry('IMAGE', imgPath, bitmapHash, '[Image]', thumbPath, base64)
-      if (mainWindow) mainWindow.webContents.send('history-updated')
-      
-    } else if (text) {
+    if (text) {
       const hash = crypto.createHash('md5').update(text).digest('hex')
       if (hash === lastTextHash) return
       lastTextHash = hash
 
-      db.addEntry('TEXT', text, hash, text.substring(0, 200))
-      
-      if (settings.aiEnabled && settings.aiApiKey) {
-        import('./ai.js').then(({ classifyText }) => {
-          classifyText(text, settings.aiApiKey, settings.aiModel).then(tags => {
-            if (tags && tags.length > 0) console.log(`Classified as: ${tags.join(', ')}`)
-          }).catch(err => console.error('AI Classification Error:', err))
-        })
+      const existing = db.getByHash(hash)
+      if (existing) {
+        db.updateTimestamp(existing.id)
+        const entry = db.getById(existing.id)
+        notifyHistoryUpdated(entry)
+        return
       }
-      if (mainWindow) mainWindow.webContents.send('history-updated')
+
+      const newId = db.addEntry('TEXT', text, hash, text.substring(0, 200))
+      const entry = db.getById(newId)
+      notifyHistoryUpdated(entry)
     }
   } catch (err) {
     console.error('CRITICAL: checkClipboard Error:', err)
   }
 }
 
+// --- local-file protocol with byte-bounded LRU cache ---
 const imageCache = new Map()
-const MAX_CACHE_SIZE = 100
+const MAX_CACHE_BYTES = 50 * 1024 * 1024
+let cacheBytes = 0
 
 app.whenReady().then(() => {
   protocol.handle('local-file', async (request) => {
     try {
       const cacheKey = request.url
-      if (imageCache.has(cacheKey)) return new Response(imageCache.get(cacheKey))
+      if (imageCache.has(cacheKey)) {
+        const buf = imageCache.get(cacheKey)
+        // Move to end (most-recent).
+        imageCache.delete(cacheKey)
+        imageCache.set(cacheKey, buf)
+        return new Response(buf)
+      }
 
       const url = new URL(request.url)
       let fullPath = decodeURIComponent(url.pathname)
@@ -218,7 +233,6 @@ app.whenReady().then(() => {
         fullPath = fullPath.slice(1)
       }
       const normalizedPath = normalize(fullPath)
-      // Security: only serve files from the images directory
       const resolvedPath = resolve(normalizedPath)
       const resolvedImagesDir = resolve(IMAGES_DIR)
       if (!resolvedPath.startsWith(resolvedImagesDir)) {
@@ -226,12 +240,16 @@ app.whenReady().then(() => {
         return new Response('Forbidden', { status: 403 })
       }
       const buffer = await fs.readFile(resolvedPath)
-      
-      if (imageCache.size >= MAX_CACHE_SIZE) {
+
+      // Evict by bytes (FIFO) until we can fit this entry.
+      while (cacheBytes + buffer.length > MAX_CACHE_BYTES && imageCache.size > 0) {
         const firstKey = imageCache.keys().next().value
+        const old = imageCache.get(firstKey)
         imageCache.delete(firstKey)
+        cacheBytes -= old.length
       }
       imageCache.set(cacheKey, buffer)
+      cacheBytes += buffer.length
       return new Response(buffer)
     } catch (err) {
       return new Response('Error', { status: 500 })
@@ -245,36 +263,25 @@ app.whenReady().then(() => {
   createTray()
 
   globalShortcut.register('CommandOrControl+Alt+V', () => {
+    if (!mainWindow) return
     if (mainWindow.isVisible()) mainWindow.hide()
     else showWindow()
   })
 
-  setInterval(checkClipboard, 1000)
+  clipboardInterval = setInterval(checkClipboard, 1000)
 
   ipcMain.handle('get-history', (_, filter, query, limit, offset) => db.getHistory(filter, query, limit, offset))
   ipcMain.handle('toggle-favorite', (_, id) => db.toggleFavorite(id))
   ipcMain.handle('delete-entry', async (_, id) => {
-    // Clean up image files if this is an image entry
     const entry = db.getById(id)
     if (entry && entry.data_type === 'IMAGE') {
-      if (entry.content) {
-        try { await fs.remove(entry.content) } catch { /* ignore */ }
-      }
-      if (entry.thumbnail_path) {
-        try { await fs.remove(entry.thumbnail_path) } catch { /* ignore */ }
-      }
+      if (entry.content) { try { await fs.remove(entry.content) } catch {} }
+      if (entry.thumbnail_path) { try { await fs.remove(entry.thumbnail_path) } catch {} }
     }
     db.deleteEntry(id)
   })
-  ipcMain.handle('get-settings', () => settings)
-  ipcMain.handle('save-settings', (_, newSettings) => {
-    settings = { ...settings, ...newSettings }
-    saveSettings()
-    return settings
-  })
   ipcMain.handle('paste-item', async (_, content, type) => {
     if (type === 'IMAGE') {
-      // Security: validate path is within IMAGES_DIR
       const resolvedPath = resolve(content)
       const resolvedImagesDir = resolve(IMAGES_DIR)
       if (!resolvedPath.startsWith(resolvedImagesDir)) {
@@ -286,21 +293,27 @@ app.whenReady().then(() => {
     } else {
       clipboard.writeText(content)
     }
-    mainWindow.hide()
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
   })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
 
-  // Cleanup on quit
-  app.on('will-quit', () => {
-    imageWorker.terminate()
-    globalShortcut.unregisterAll()
-    if (powerSaveBlockerId != null) {
-      powerSaveBlocker.stop(powerSaveBlockerId)
-    }
-  })
+// Async cleanup: clear interval, unregister shortcuts, close DB, destroy tray, terminate worker.
+app.on('will-quit', (event) => {
+  event.preventDefault()
+  clearInterval(clipboardInterval)
+  globalShortcut.unregisterAll()
+  closeDb()
+  tray?.destroy()
+  const finalize = () => app.exit(0)
+  if (imageWorker) {
+    imageWorker.terminate().then(finalize).catch(finalize)
+  } else {
+    finalize()
+  }
 })
 
 app.on('window-all-closed', () => {

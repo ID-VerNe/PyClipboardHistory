@@ -1,1 +1,8 @@
 /storage/
+node_modules/
+out/
+dist/
+output.txt
+clipboard.db
+.gemini_backups/
+.claude/

@@ -2,12 +2,15 @@ import { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { Search, Star, Trash2, Clipboard, Image as ImageIcon, File } from 'lucide-react'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 function cn(...inputs) {
   return twMerge(clsx(inputs))
 }
 
 const PAGE_SIZE = 50
+// Hard cap to bound renderer memory; oldest loaded pages are dropped.
+const MAX_ITEMS = 500
 
 // Individual History Item component for better performance
 const HistoryItem = memo(({ item, onPaste, onToggleFav, onDelete, formatTimestamp }) => {
@@ -50,7 +53,7 @@ const HistoryItem = memo(({ item, onPaste, onToggleFav, onDelete, formatTimestam
         {item.data_type === 'IMAGE' ? (
           <div className="relative mt-1 group/img">
             <img
-              src={item.preview_base64 || (item.thumbnail_path ? `local-file:///${item.thumbnail_path.replace(/\\/g, '/')}` : '')}
+              src={item.thumbnail_path ? `local-file:///${item.thumbnail_path.replace(/\\/g, '/')}` : ''}
               className="max-h-40 w-auto rounded-lg border border-slate-200 dark:border-zinc-700 shadow-sm transition-transform group-hover/img:scale-[1.01]"
               loading="lazy"
               alt=""
@@ -97,25 +100,38 @@ export default function App() {
   const [error, setError] = useState(null)
 
   const searchInputRef = useRef(null)
-  const observerTarget = useRef(null)
   const listRef = useRef(null)
   const loadHistoryRef = useRef(null)
   const historyLengthRef = useRef(0)
 
+  // Refs that mirror state for use in stable callbacks / effects.
+  const loadingRef = useRef(false)
+  const hasMoreRef = useRef(true)
+  const filterRef = useRef('All')
+  const debouncedSearchRef = useRef('')
+  const historyRef = useRef([])
+
+  useEffect(() => { loadingRef.current = loading }, [loading])
+  useEffect(() => { hasMoreRef.current = hasMore }, [hasMore])
+  useEffect(() => { filterRef.current = filter }, [filter])
+  useEffect(() => { debouncedSearchRef.current = debouncedSearch }, [debouncedSearch])
+  useEffect(() => { historyRef.current = history }, [history])
+
   const loadHistory = useCallback(async (isNextPage = false) => {
-    if (loading) return
+    if (loadingRef.current) return
     setLoading(true)
     setError(null)
 
     try {
       const offset = isNextPage ? historyLengthRef.current : 0
-      const data = await window.api.getHistory(filter, debouncedSearch, PAGE_SIZE, offset)
+      const data = await window.api.getHistory(filterRef.current, debouncedSearchRef.current, PAGE_SIZE, offset)
 
       if (isNextPage) {
         setHistory(prev => {
-          const newHistory = [...prev, ...data]
-          historyLengthRef.current = newHistory.length
-          return newHistory
+          const combined = [...prev, ...data]
+          const capped = combined.length > MAX_ITEMS ? combined.slice(combined.length - MAX_ITEMS) : combined
+          historyLengthRef.current = capped.length
+          return capped
         })
       } else {
         setHistory(data)
@@ -129,36 +145,34 @@ export default function App() {
       setLoading(false)
       setInitialLoad(false)
     }
-  }, [filter, debouncedSearch])
+  }, [])
 
-  // Keep ref in sync with latest loadHistory
+  // Keep ref in sync with latest loadHistory (stable now, but harmless).
   useEffect(() => {
     loadHistoryRef.current = loadHistory
-  })
+  }, [loadHistory])
 
-  // Infinite scroll observer — stable ref avoids resubscribing on every page load
+  // Infinite scroll observer — stable, reads latest state via refs.
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
+        if (entries[0].isIntersecting && hasMoreRef.current && !loadingRef.current) {
           loadHistoryRef.current(true)
         }
       },
-      { threshold: 0.1 }
+      { root: listRef.current, threshold: 0.1 }
     )
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current)
-    }
+    const target = listRef.current?.querySelector('[data-sentinel]')
+    if (target) observer.observe(target)
 
     return () => observer.disconnect()
-  }, [hasMore, loading])
+  }, [])
 
   // Initial load and filter change
   useEffect(() => {
     loadHistory(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, debouncedSearch])
+  }, [filter, debouncedSearch, loadHistory])
 
   // Search Debounce
   useEffect(() => {
@@ -168,6 +182,7 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [search])
 
+  // IPC subscriptions — stable (deps []), reads latest state via refs.
   useEffect(() => {
     const removeShowListener = window.api.onWindowShown(() => {
       setSearch('')
@@ -178,7 +193,24 @@ export default function App() {
       setTimeout(() => searchInputRef.current?.focus(), 100)
     })
 
-    const removeUpdateListener = window.api.onHistoryUpdated(() => loadHistory(false))
+    const removeUpdateListener = window.api.onHistoryUpdated((entry) => {
+      if (!entry) {
+        // Fallback: unknown update — reload first page only if not searching.
+        if (!debouncedSearchRef.current && filterRef.current === 'All') {
+          loadHistoryRef.current(false)
+        }
+        return
+      }
+      // Incremental: prepend new / move-to-top entry. Skip if a search/filter is active
+      // (the entry may not match the current view).
+      if (debouncedSearchRef.current || filterRef.current !== 'All') {
+        if (filterRef.current !== 'All' && entry.data_type !== filterRef.current) return
+      }
+      setHistory(prev => {
+        const without = prev.filter(i => i.id !== entry.id)
+        return [entry, ...without].slice(0, MAX_ITEMS)
+      })
+    })
 
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
@@ -193,7 +225,7 @@ export default function App() {
       removeUpdateListener()
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [loadHistory])
+  }, [])
 
   const handlePaste = useCallback((item) => {
     window.api.pasteItem(item.content, item.data_type).catch(err => {
@@ -202,7 +234,7 @@ export default function App() {
   }, [])
 
   const toggleFav = useCallback(async (id) => {
-    const prevState = history.find(item => item.id === id)?.is_favorite
+    const prevState = historyRef.current.find(item => item.id === id)?.is_favorite
     setHistory(prev => prev.map(item => item.id === id ? { ...item, is_favorite: !item.is_favorite } : item))
     try {
       await window.api.toggleFavorite(id)
@@ -210,10 +242,10 @@ export default function App() {
       console.error('Failed to toggle favorite:', err)
       setHistory(prev => prev.map(item => item.id === id ? { ...item, is_favorite: prevState } : item))
     }
-  }, [history])
+  }, [])
 
   const deleteItem = useCallback(async (id) => {
-    const deletedItem = history.find(item => item.id === id)
+    const deletedItem = historyRef.current.find(item => item.id === id)
     setHistory(prev => prev.filter(item => item.id !== id))
     try {
       await window.api.deleteEntry(id)
@@ -226,7 +258,7 @@ export default function App() {
         })
       }
     }
-  }, [history])
+  }, [])
 
   const formatTimestamp = useCallback((ts) => {
     const date = new Date(ts)
@@ -238,6 +270,15 @@ export default function App() {
     }
     return date.toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
   }, [])
+
+  const virtualizer = useVirtualizer({
+    count: history.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 120,
+    overscan: 8
+  })
+
+  const items = virtualizer.getVirtualItems()
 
   // Determine what message to show in the empty state
   const getEmptyMessage = () => {
@@ -320,31 +361,36 @@ export default function App() {
             <p className="text-sm font-medium opacity-60">{getEmptyMessage()}</p>
           </div>
         ) : (
-          <>
-            {history.map(item => (
-              <HistoryItem
-                key={item.id}
-                item={item}
-                onPaste={handlePaste}
-                onToggleFav={toggleFav}
-                onDelete={deleteItem}
-                formatTimestamp={formatTimestamp}
-              />
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+            {items.map(virtualItem => (
+              <div
+                key={virtualItem.key}
+                data-index={virtualItem.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start}px)`
+                }}
+              >
+                <HistoryItem
+                  item={history[virtualItem.index]}
+                  onPaste={handlePaste}
+                  onToggleFav={toggleFav}
+                  onDelete={deleteItem}
+                  formatTimestamp={formatTimestamp}
+                />
+              </div>
             ))}
             {/* Sentinel element for infinite scroll */}
-            <div ref={observerTarget} className="h-10 w-full flex items-center justify-center text-xs text-slate-400">
+            <div data-sentinel className="h-10 w-full flex items-center justify-center text-xs text-slate-400">
               {loading ? 'Loading more...' : hasMore ? 'Scroll for more' : 'End of history'}
             </div>
-          </>
+          </div>
         )}
       </div>
-
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #3f3f46; }
-      `}</style>
     </div>
   )
 }
