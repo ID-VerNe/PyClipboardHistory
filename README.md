@@ -41,8 +41,8 @@
 ## 性能要点
 
 - **数据库**: `journal_mode=WAL` + `synchronous=NORMAL` + 内存临时表 + 20MB 页缓存 + 64MB mmap。预编译语句只在模块作用域 prepare 一次。查询投影所需列，不 `SELECT *`。组合索引 `(is_favorite, timestamp DESC)` / `(data_type, timestamp DESC)`。
-- **主进程不抢资源**: 不再设置 `PRIORITY_HIGH`、不再禁止系统休眠、不再关闭后台节流。剪贴板管理器空闲时不该抢 CPU。
-- **生命周期清理**: 退出时 `will-quit` 异步清理 setInterval、关闭 DB、销毁托盘、terminate worker，进程干净退出。单实例锁防止多开。
+- **不抢系统资源**: 不设置 `PRIORITY_HIGH`、不禁止系统休眠。剪贴板管理器空闲时不该抢 CPU。但保留反节流开关（`disable-renderer-backgrounding` 等）+ `backgroundThrottling:false`，让隐藏到托盘的窗口每次唤起即时出内容，不白屏卡死。
+- **生命周期清理**: 退出时 `will-quit` 异步清理剪贴板轮询 interval、WAL checkpoint 定时器、全局快捷键、DB、托盘、worker，进程干净退出。单实例锁防止多开。常驻期间每 60s 跑一次 `wal_checkpoint(PASSIVE)` 折叠 WAL，避免轮询写堆积导致冷读变慢。
 - **一次性优化**: 首次运行新版本时跑一次（写 `.optimized_v1` flag，不再重跑）：重建 FTS 索引、清空无用的 `preview_base64` 列、删除磁盘上无 DB 行引用的孤儿图片文件。
 
 ## 开始使用
