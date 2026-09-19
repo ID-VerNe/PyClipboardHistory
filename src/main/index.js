@@ -2,12 +2,21 @@ import { app, shell, BrowserWindow, ipcMain, clipboard, globalShortcut, Tray, Me
 import { join, normalize, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import db, { closeDb, DATA_DIR, IMAGES_DIR, THUMBS_DIR } from './db'
+import db, { closeDb, checkpoint, DATA_DIR, IMAGES_DIR, THUMBS_DIR } from './db'
 import crypto from 'crypto'
 import fs from 'fs-extra'
 import { Worker } from 'worker_threads'
 
 let nextRequestId = 0
+
+// Keep the hidden tray window's compositor alive so show() is instant.
+// These were removed in ed6b50f along with PRIORITY_HIGH; restoring only the
+// anti-throttle switches (NOT priority/powerSaveBlocker — those were correctly dropped).
+// Without them, hide() occludes the renderer, and every show() blocks 1-3s while
+// Chromium resumes the compositor + repoints the first frame.
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
 
 // Single instance lock — avoid multiple pollers / workers / SQLite writers.
 if (!app.requestSingleInstanceLock()) {
@@ -77,12 +86,14 @@ function createWindow() {
     frame: false,
     alwaysOnTop: true,
     skipTaskbar: true,
+    backgroundColor: '#f8fafc',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      backgroundThrottling: false
     }
   })
   mainWindow.on('closed', () => { mainWindow = null })
@@ -269,6 +280,8 @@ app.whenReady().then(() => {
   })
 
   clipboardInterval = setInterval(checkClipboard, 1000)
+  // Bound WAL growth from the 1s poll writes; PASSIVE never blocks a writer.
+  setInterval(() => { try { checkpoint() } catch {} }, 60000)
 
   ipcMain.handle('get-history', (_, filter, query, limit, offset) => db.getHistory(filter, query, limit, offset))
   ipcMain.handle('toggle-favorite', (_, id) => db.toggleFavorite(id))

@@ -249,6 +249,12 @@ export function closeDb() {
   try { db.close() } catch { /* already closed */ }
 }
 
+// Fold WAL frames back into the db without blocking writers. Called on a timer
+// from main to bound WAL growth (the 1s clipboard poll writes continuously).
+export function checkpoint() {
+  try { db.pragma('wal_checkpoint(PASSIVE)') } catch { /* ignore */ }
+}
+
 export default {
   getByHash(content_hash) {
     if (content_hash == null) return null

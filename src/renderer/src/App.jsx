@@ -51,10 +51,10 @@ const HistoryItem = memo(({ item, onPaste, onToggleFav, onDelete, formatTimestam
         </div>
 
         {item.data_type === 'IMAGE' ? (
-          <div className="relative mt-1 group/img">
+          <div className="relative mt-1 group/img h-40 w-full flex items-center justify-center overflow-hidden rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/40">
             <img
               src={item.thumbnail_path ? `local-file:///${item.thumbnail_path.replace(/\\/g, '/')}` : ''}
-              className="max-h-40 w-auto rounded-lg border border-slate-200 dark:border-zinc-700 shadow-sm transition-transform group-hover/img:scale-[1.01]"
+              className="max-h-40 max-w-full object-contain transition-transform group-hover/img:scale-[1.01]"
               loading="lazy"
               alt=""
             />
@@ -188,7 +188,10 @@ export default function App() {
       setSearch('')
       setDebouncedSearch('')
       setFilter('All')
-      setInitialLoad(true)
+      // Do NOT setInitialLoad(true) here: with cached history[] in state the list
+      // stays painted while we refresh, so the window shows content instantly
+      // instead of flashing a skeleton. The skeleton branch only renders when
+      // history.length === 0, which won't be true on a re-show.
       if (listRef.current) listRef.current.scrollTop = 0
       // Force a fresh first-page load on every show. Setting filter/search to the
       // same values they may already hold does NOT retrigger the load effect
