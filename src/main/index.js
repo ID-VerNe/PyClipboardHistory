@@ -284,6 +284,7 @@ app.whenReady().then(() => {
   setInterval(() => { try { checkpoint() } catch {} }, 60000)
 
   ipcMain.handle('get-history', (_, filter, query, limit, offset) => db.getHistory(filter, query, limit, offset))
+  ipcMain.handle('search-fuzzy', (_, query, limit) => db.fuzzySearch(query, limit))
   ipcMain.handle('toggle-favorite', (_, id) => db.toggleFavorite(id))
   ipcMain.handle('delete-entry', async (_, id) => {
     const entry = db.getById(id)

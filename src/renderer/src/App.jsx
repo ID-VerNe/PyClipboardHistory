@@ -103,6 +103,7 @@ export default function App() {
   const listRef = useRef(null)
   const loadHistoryRef = useRef(null)
   const historyLengthRef = useRef(0)
+  const fuzzySeqRef = useRef(0)
 
   // Refs that mirror state for use in stable callbacks / effects.
   const loadingRef = useRef(false)
@@ -138,6 +139,28 @@ export default function App() {
         historyLengthRef.current = data.length
       }
       setHasMore(data.length === PAGE_SIZE)
+
+      // Typo-tolerant fallback: when the SQL substring search returned few
+      // results for a non-trivial query, ask the main process for a fuse.js
+      // pass and merge new hits in. Guarded by a sequence ref so a stale
+      // fuzzy response never overwrites a newer search.
+      if (!isNextPage && data.length < 5 && debouncedSearchRef.current.trim().length >= 4) {
+        const seq = ++fuzzySeqRef.current
+        try {
+          const fuzzyData = await window.api.searchFuzzy(debouncedSearchRef.current, 50)
+          if (seq !== fuzzySeqRef.current) return
+          if (fuzzyData.length === 0) return
+          setHistory(prev => {
+            const seen = new Set(prev.map(i => i.id))
+            const merged = [...prev, ...fuzzyData.filter(i => !seen.has(i.id))]
+            historyLengthRef.current = merged.length
+            setHasMore(merged.length >= PAGE_SIZE)
+            return merged
+          })
+        } catch (fuzzyErr) {
+          console.error('Fuzzy search failed:', fuzzyErr)
+        }
+      }
     } catch (err) {
       console.error('Failed to load history:', err)
       setError('Failed to load clipboard history. Please try again.')

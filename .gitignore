@@ -6,3 +6,6 @@ output.txt
 clipboard.db
 .gemini_backups/
 .claude/
+
+# glue-engineer deep analysis artifacts
+.glue/

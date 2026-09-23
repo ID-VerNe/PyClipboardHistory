@@ -3,6 +3,7 @@ import { exposeElectronAPI } from '@electron-toolkit/preload'
 
 const api = {
   getHistory: (filter, query, limit, offset) => ipcRenderer.invoke('get-history', filter, query, limit, offset),
+  searchFuzzy: (query, limit) => ipcRenderer.invoke('search-fuzzy', query, limit),
   toggleFavorite: (id) => ipcRenderer.invoke('toggle-favorite', id),
   deleteEntry: (id) => ipcRenderer.invoke('delete-entry', id),
   pasteItem: (content, type) => {
