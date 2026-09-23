@@ -7,7 +7,9 @@
 - **跨平台支持**：基于 Electron，支持 Windows (目前优化最好)。
 - **现代 UI**：使用 React 和 Tailwind CSS 构建，支持暗色模式（跟随系统）。
 - **剪贴板监控**：自动保存文本和图片。轮询使用廉价的尺寸 fast-path 跳过未变化内容，避免每秒重复分配大缓冲区。
-- **全文搜索**：基于 SQLite FTS5 的内容/预览全文索引，搜索走索引而非 `LIKE` 全表扫。
+- **两层全文搜索**：
+  - **子串 + 拼音（SQL trigram，每次键击）**：FTS5 用 trigram tokenizer 而非默认的 unicode61 词级切分，所以 `come` 能命中 `Welcome`、`wel` 也能命中。索引四列：原文 `content`、`preview`、`content_pinyin`（无声调全拼，`你好世界`→`nihaoshijie`）、`content_initials`（首字母，`中文拼音`→`zwpy`）。拼音列在写入时对含中文的行预计算，搜索用 per-column UNION LIKE `%token%` 走索引，一次查询同时覆盖子串、全拼、首字母三种匹配。实测 ~0.05-0.3ms/键击。
+  - **typo 兜底（fuse.js，debounced）**：仅当 SQL 搜索返回 <5 条且查询 ≥4 字符时触发，覆盖打字错误（`welocme`→`welcome`、`nihoa`→`你好`）。主进程持 lazy Fuse 单例 over 全部 TEXT 行，新增/删除时标记 dirty 下次调用时重建。
 - **图片预览**：自动生成 WebP 缩略图（200px），在 worker 线程处理，主线程不阻塞。通过自定义 `local-file://` 协议从磁盘流式加载，带字节上限的 LRU 缓存。
 - **虚拟化列表**：使用 `@tanstack/react-virtual` 渲染历史，即使上万条也只挂载可见行。
 - **全局快捷键**：`Ctrl + Alt + V` 快速唤起。
@@ -16,7 +18,7 @@
 ## 技术栈
 
 - **前端**: React, Tailwind CSS, Lucide Icons, @tanstack/react-virtual
-- **后端 (Main Process)**: Electron, better-sqlite3 (高性能数据库，WAL 模式), sharp (极速图像处理，跑在 worker_threads)
+- **后端 (Main Process)**: Electron, better-sqlite3 (高性能数据库，WAL 模式), sharp (极速图像处理，跑在 worker_threads), pinyin-pro (中文拼音预计算), fuse.js (typo 容忍兜底搜索)
 - **构建工具**: electron-vite, pnpm (hoisted linker)
 
 ## 数据存储位置
@@ -44,6 +46,8 @@
 - **不抢系统资源**: 不设置 `PRIORITY_HIGH`、不禁止系统休眠。剪贴板管理器空闲时不该抢 CPU。但保留反节流开关（`disable-renderer-backgrounding` 等）+ `backgroundThrottling:false`，让隐藏到托盘的窗口每次唤起即时出内容，不白屏卡死。
 - **生命周期清理**: 退出时 `will-quit` 异步清理剪贴板轮询 interval、WAL checkpoint 定时器、全局快捷键、DB、托盘、worker，进程干净退出。单实例锁防止多开。常驻期间每 60s 跑一次 `wal_checkpoint(PASSIVE)` 折叠 WAL，避免轮询写堆积导致冷读变慢。
 - **一次性优化**: 首次运行新版本时跑一次（写 `.optimized_v1` flag，不再重跑）：重建 FTS 索引、清空无用的 `preview_base64` 列、删除磁盘上无 DB 行引用的孤儿图片文件。
+- **search-v2 迁移**: 首次运行时跑一次（写 `.search_v2` flag）：对含中文的 TEXT 行回填 `content_pinyin`/`content_initials` 两列，然后 drop+recreate trigram FTS 表重建索引。
+- **索引健康自检**: 每次启动对比 `clipboard_history_fts_idx` 与 base table 行数，若索引行数 <50% 视为 corrupt（生产中踩过的 rebuild bug：1000+ 行只建出 5 行索引），自动 drop+recreate 自愈。这是因为 better-sqlite3 9.6.0 / SQLite 3.45.3 的 external-content trigram FTS 上 `INSERT INTO fts VALUES('rebuild')` 只写 content 不建倒排索引，只有 drop+recreate+INSERT-SELECT 能可靠建出完整索引。
 
 ## 开始使用
 
